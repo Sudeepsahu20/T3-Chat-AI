@@ -45,10 +45,10 @@ function extractPartsAsJSON(message) {
 export async function POST(req) {
   try {
     const { chatId, messages: newMessages, model, skipUserMessage } = await req.json();
-
+    console.log("Chattttttt iiiddddd",chatId);
     // ✅ Ensure we always have a safe model
     const finalModel = model || "google/gemma-2-9b-it";
-
+   console.log("using model",finalModel);
     // Fetch previous messages from DB
     const previousMessages = chatId
       ? await db.message.findMany({

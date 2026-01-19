@@ -103,7 +103,7 @@ export const createChatWithMessage = async (values) => {
           },
         },
       },
-      include: { messages: true }, // Include messages in response
+      include: { messages: true }, 
     });
 
     revalidatePath("/");

@@ -14,8 +14,8 @@ import { useCreateChat } from "../hooks/chat";
 
 export default function ChatMessageForm({ initialMessage, onMessageChange }) {
   const { data: models, isPending, error } = useAIModels();
-
-  const [message, setMessage] = useState("");
+  
+    const [message, setMessage] = useState("");
 
   const [useWebSearch, setUseWebSearch] = useState(false);
 

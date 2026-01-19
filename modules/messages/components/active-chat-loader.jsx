@@ -8,8 +8,6 @@ const ActiveChatLoader = ({chatId}) => {
     const { setActiveChatId, setMessages, addChat, chats } = useChatStore();
   
     const { data } = useGetChatById(chatId);
-
-     
   useEffect(() => {
     if (!chatId) return;
     setActiveChatId(chatId);
@@ -17,9 +15,9 @@ const ActiveChatLoader = ({chatId}) => {
 
     useEffect(() => {
       if (!data || !data.success || !data.data) return;
-  
+    
       const chat = data.data;
-  
+    
       // populate messages
       setMessages(chat.messages || []);
   

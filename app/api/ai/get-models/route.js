@@ -14,9 +14,8 @@ export async function GET(req) {
     if (!response.ok) {
       throw new Error(`OpenRouter API error: ${response.status}`);
     }
-
+          
     const data = await response.json();
-    
     const freeModels = data.data.filter(model => {
       const promptPrice = parseFloat(model.pricing?.prompt || '0');
       const completionPrice = parseFloat(model.pricing?.completion || '0');

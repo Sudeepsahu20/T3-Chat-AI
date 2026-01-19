@@ -1107,12 +1107,3 @@ export const PromptInputCommandSeparator = ({
 }) => (
   <CommandSeparator className={cn(className)} {...props} />
 );
-
-export const PromptInputToolbar = ({
-  className,
-  ...props
-}) => (
-  <div
-    className={cn("flex items-center justify-between p-1", className)}
-    {...props} />
-);

@@ -1,14 +1,10 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
-
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
+import { useChat } from "@ai-sdk/react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { RotateCcwIcon, SendIcon } from "lucide-react";
 
-import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningTrigger,
-} from "@/components/ai-elements/reasoning";
 import {
   Conversation,
   ConversationContent,
@@ -16,31 +12,16 @@ import {
 } from "@/components/ai-elements/conversation";
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputButton,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputToolbar,
-  PromptInputTools,
-} from "@/components/ai-elements/prompt-input";
-import { Response } from "@/components/ai-elements/response";
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
 import { Spinner } from "@/components/ui/spinner";
 
-
-
-import { useSearchParams, useRouter } from "next/navigation";
-import {
-  GlobeIcon,
-  RotateCcwIcon,
-  StopCircleIcon,
-  ExternalLinkIcon,
-  SearchIcon,
-} from "lucide-react";
 import { useChatStore } from "@/modules/chat/store/chat-store";
 import { useAIModels } from "@/modules/ai-agent/hook/ai-agent";
-import { ModelSelector } from "@/modules/chat/components/model-selector";
 import { useGetChatById } from "@/modules/chat/hooks/chat";
+import { ModelSelector } from "@/modules/chat/components/model-selector";
 
 
 
@@ -48,66 +29,67 @@ export default function MessageViewWithForm({ chatId }) {
   const { data: models, isPending: isModelLoading } = useAIModels();
   const { data, isPending } = useGetChatById(chatId);
   const { hasChatBeenTriggered, markChatAsTriggered } = useChatStore();
-
-  const [selectedModel, setSelectedModel] = useState(data?.data?.model);
+  
+  const [selectedModel, setSelectedModel] = useState(null);
   const [input, setInput] = useState("");
- 
-  const hasAutoTriggered = useRef(false);
 
   const searchParams = useSearchParams();
   const router = useRouter();
   const shouldAutoTrigger = searchParams.get("autoTrigger") === "true";
+  const hasAutoTriggered = useRef(false);
 
+ 
   const initialMessages = useMemo(() => {
     if (!data?.data?.messages) return [];
 
     return data.data.messages
-      .filter((msg) => msg.content && msg.content.trim() !== "" && msg.id)
-      .map((msg) => {
+      .filter((m) => m.content && m.id)
+      .map((m) => {
         try {
-          const parts = JSON.parse(msg.content);
-
+          const parts = JSON.parse(m.content);
           return {
-            id: msg.id,
-            role: msg.messageRole.toLowerCase(),
+            id: m.id,
+            role: m.messageRole.toLowerCase(),
             parts: Array.isArray(parts)
               ? parts
-              : [{ type: "text", text: msg.content }],
-            createdAt: msg.createdAt,
+              : [{ type: "text", text: m.content }],
           };
-        } catch (e) {
+        } catch {
           return {
-            id: msg.id,
-            role: msg.messageRole.toLowerCase(),
-            parts: [{ type: "text", text: msg.content }],
-            createdAt: msg.createdAt,
+            id: m.id,
+            role: m.messageRole.toLowerCase(),
+            parts: [{ type: "text", text: m.content }],
           };
         }
       });
   }, [data]);
 
- const { stop, messages, status, sendMessage, regenerate } =
-  useChat({
-    initialMessages: [],
+
+  const { messages, status, sendMessage, stop } = useChat({
     api: "/api/chat",
+    initialMessages: [],
   });
 
-
+ 
   useEffect(() => {
     if (data?.data?.model && !selectedModel) {
       setSelectedModel(data.data.model);
     }
   }, [data, selectedModel]);
 
-  useEffect(() => {
-    if (hasAutoTriggered.current) return;
-    if (!shouldAutoTrigger) return;
-    if (hasChatBeenTriggered(chatId)) return;
-    if (!selectedModel) return;
-    if (initialMessages.length === 0) return;
 
-    const lastMessage = initialMessages[initialMessages.length - 1];
-    if (lastMessage.role !== "user") return;
+  useEffect(() => {
+    if (
+      !shouldAutoTrigger ||
+      hasAutoTriggered.current ||
+      hasChatBeenTriggered(chatId) ||
+      !selectedModel ||
+      initialMessages.length === 0
+    )
+      return;
+
+    const last = initialMessages[initialMessages.length - 1];
+    if (last.role !== "user") return;
 
     hasAutoTriggered.current = true;
     markChatAsTriggered(chatId);
@@ -129,13 +111,14 @@ export default function MessageViewWithForm({ chatId }) {
     chatId,
     selectedModel,
     initialMessages,
+    sendMessage,
     markChatAsTriggered,
     hasChatBeenTriggered,
-    sendMessage,
     router,
   ]);
 
-  const handleSubmit = () => {
+  const handleSubmit = (e) => {
+    e?.preventDefault();
     if (!input.trim()) return;
 
     sendMessage(
@@ -144,7 +127,6 @@ export default function MessageViewWithForm({ chatId }) {
         body: {
           model: selectedModel,
           chatId,
-        
         },
       }
     );
@@ -152,132 +134,134 @@ export default function MessageViewWithForm({ chatId }) {
   };
 
   const handleRetry = () => {
-    regenerate();
+    const allMessages = [...initialMessages, ...messages];
+
+    const lastUserMessage = [...allMessages]
+      .reverse()
+      .find((m) => m.role === "user");
+
+    if (!lastUserMessage) return;
+
+    sendMessage(
+      { text: lastUserMessage.parts?.[0]?.text || "" },
+      {
+        body: {
+          model: selectedModel,
+          chatId,
+          skipUserMessage: true,
+        },
+      }
+    );
   };
 
-  const handleStop = () => {
-    stop();
-  };
+  const messageToRender = [...initialMessages, ...messages];
 
-
+  const canRetry =
+    messageToRender.length > 0 &&
+    messageToRender[messageToRender.length - 1]?.role === "assistant" &&
+    status !== "streaming";
 
   if (isPending) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex h-full items-center justify-center">
         <Spinner />
       </div>
     );
   }
 
-  const messageToRender = [...initialMessages, ...messages];
-
-
-
   return (
-    <div className="max-w-4xl mx-auto p-6 relative size-full h-[calc(100vh-4rem)]">
-      <div className="flex flex-col h-full">
-        <Conversation className="h-full">
-          <ConversationContent>
-            {messageToRender.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                Start a conversation...
-              </div>
-            ) : (
-              messageToRender.map((message) => (
-                <Fragment key={message.id}>
-                  {message.parts.map((part, i) => {
-                    switch (part.type) {
-                      case "text":
-                        return (
-                          <Message
-                            from={message.role}
-                            key={`${message.id}-${i}`}
-                          >
-                            <MessageContent>
-                              <Response>{part.text}</Response>
-                            </MessageContent>
-                          </Message>
-                        );
-                      case "reasoning":
-                        return (
-                          <Reasoning
-                            className="max-w-2xl px-4 py-4 border border-muted rounded-md bg-muted/50"
-                            key={`${message.id}-${i}`}
-                          >
-                            <ReasoningTrigger />
-                            <ReasoningContent className="mt-2 italic font-light text-muted-foreground">
-                              {part.text}
-                            </ReasoningContent>
-                          </Reasoning>
-                        );
-                   
-              
-                     
-                      case "step-start":
-                        return i > 0 ? (
-                          <div
-                            key={`${message.id}-${i}`}
-                            className="my-4 text-gray-500"
-                          >
-                            <hr className="border-gray-300" />
-                          </div>
-                        ) : null;
-                      default:
-                        return null;
-                    }
-                  })}
-                </Fragment>
-              ))
-            )}
-            {status === "streaming" && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Spinner />
-                <span className="text-sm">AI is thinking...</span>
-              </div>
-            )}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
+    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-4xl flex-col p-6">
+      <Conversation className="flex-1">
+        <ConversationContent>
+          {messageToRender.map((message) => (
+            <Fragment key={message.id}>
+              {message.parts.map((part, i) => {
+                if (part.type === "text") {
+                  return (
+                    <Message from={message.role} key={i}>
+                      <MessageContent>{part.text}</MessageContent>
+                    </Message>
+                  );
+                }
 
-        <PromptInput onSubmit={handleSubmit} className="mt-4">
-          <PromptInputBody>
-            <PromptInputTextarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message..."
-              disabled={status === "streaming"}
-            />
-          </PromptInputBody>
-          <PromptInputToolbar>
-            <PromptInputTools className="flex items-center gap-2">
-              {isModelLoading ? (
-                <Spinner />
-              ) : (
-                <ModelSelector
-                  models={models?.models}
-                  selectedModelId={selectedModel}
-                  onModelSelect={setSelectedModel}
-                />
-              )}
-             
-              {status === "streaming" ? (
-                <PromptInputButton onClick={handleStop}>
-                  <StopCircleIcon size={16} />
-                  <span>Stop</span>
-                </PromptInputButton>
-              ) : (
-                messageToRender.length > 0 && (
-                  <PromptInputButton onClick={handleRetry}>
-                    <RotateCcwIcon size={16} />
-                    <span>Retry</span>
-                  </PromptInputButton>
-                )
-              )}
-            </PromptInputTools>
-            <PromptInputSubmit status={status} />
-          </PromptInputToolbar>
-        </PromptInput>
-      </div>
+                if (part.type === "reasoning") {
+                  return (
+                    <Reasoning key={i} className="max-w-2xl">
+                      <ReasoningTrigger />
+                      <ReasoningContent>{part.text}</ReasoningContent>
+                    </Reasoning>
+                  );
+                }
+
+                return null;
+              })}
+            </Fragment>
+          ))}
+
+          {status === "streaming" && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Spinner />
+              AI is thinking...
+            </div>
+          )}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+
+      {/* ------------------ INPUT ------------------ */}
+      <form
+        onSubmit={handleSubmit}
+        className="mt-4 rounded-2xl border bg-background shadow-sm"
+      >
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your message..."
+          disabled={status === "streaming"}
+          className="w-full resize-none rounded-t-2xl px-4 py-3 outline-none"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit(e);
+            }
+          }}
+        />
+
+        <div className="flex items-center justify-between border-t px-3 py-2">
+          {/* Left */}
+          <div className="flex items-center gap-2">
+            {isModelLoading ? (
+              <Spinner />
+            ) : (
+              <ModelSelector
+                models={models?.models}
+                selectedModelId={selectedModel}
+                onModelSelect={setSelectedModel}
+              />
+            )}
+
+            {canRetry && (
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-muted"
+              >
+                <RotateCcwIcon size={14} />
+                Retry
+              </button>
+            )}
+          </div>
+
+          {/* Right */}
+          <button
+            type="submit"
+            disabled={!input.trim() || status === "streaming"}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50"
+          >
+            {status === "streaming" ? <Spinner /> : <SendIcon size={16} />}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
