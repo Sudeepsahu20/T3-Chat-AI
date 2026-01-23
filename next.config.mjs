@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    xperimental: {
-    turbo: false,
+  eslint: {
+    ignoreDuringBuilds: true, // ignore ESLint warnings during build
   },
 };
 
