@@ -16,7 +16,7 @@ export async function GET(req) {
     }
           
     const data = await response.json();
-    console.log(data);
+   
     const freeModels = data.data.filter(model => {
       const promptPrice = parseFloat(model.pricing?.prompt || '0');
       const completionPrice = parseFloat(model.pricing?.completion || '0');
@@ -33,7 +33,6 @@ export async function GET(req) {
       pricing: model.pricing,
       top_provider: model.top_provider,
     }));
-
     return NextResponse.json({
       models: formattedModels,
     });
